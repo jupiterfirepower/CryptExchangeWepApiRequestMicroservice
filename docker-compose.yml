@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  kafka:
+    image: moeenz/docker-kafka-kraft:latest
+    restart: always
+    ports:
+      - "9093:9093"
+    environment:
+      - KRAFT_CONTAINER_HOST_NAME=kafka-pubsub # kafka-pubsub
+      - KRAFT_CREATE_TOPICS= exchange_topic, exchange-topic
+      - KRAFT_PARTITIONS_PER_TOPIC=1
+
+  redis:
+    image: "redis:alpine"
+    command: redis-server --requirepass sOmE_sEcUrE_pAsS
+    ports:
+      - "6379:6379"
+    volumes:
+      - $PWD/redis-data:/var/lib/redis
+      - $PWD/redis.conf:/usr/local/etc/redis/redis.conf
+    environment:
+      - REDIS_REPLICATION_MODE=master    
