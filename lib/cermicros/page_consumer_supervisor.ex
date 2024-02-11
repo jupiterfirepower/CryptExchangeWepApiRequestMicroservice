@@ -12,6 +12,7 @@ defmodule Cermicros.PageConsumerSupervisor do
   def init(:ok) do
 
     Logger.info("Cermicros.PageConsumerSupervisor init.")
+    #Process.flag(:trap_exit, true)
 
     children = [
        %{id: Cermicros.WorkConsumer,
@@ -27,4 +28,9 @@ defmodule Cermicros.PageConsumerSupervisor do
 
     ConsumerSupervisor.init(children, opts)
   end
+
+  #def handle_info({:EXIT, _from, reason}, state) do
+  #  Logger.info("Tracking #{state.name} - Stopped with reason #{inspect reason}")
+  #  {:noreply, state}
+  #end
 end

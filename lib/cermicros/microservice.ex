@@ -10,13 +10,45 @@ defmodule Cermicros.Microservice do
   plug(:match)
   plug(:dispatch)
 
+  defp get_sys_state() do
+    pid_cache = Process.whereis(Cermicros.Cache)
+    pid_taskmanager = Process.whereis(Cermicros.TaskManager)
+    pid_producer = Process.whereis(Cermicros.Producer)
+
+    {islive_cache?, cache_status} = get_process_state(pid_cache)
+    {islive_taskmanager?, tm_status} = get_process_state(pid_taskmanager)
+    {islive_producer?, producer_status} = get_process_state(pid_producer)
+    {islive_microservice?, microservice_status} = get_process_state(self())
+
+    %{
+      "service status" => "ok",
+      "cache" => "live: #{islive_cache?}, status: #{inspect(cache_status)}",
+      "taskmanager" => "live: #{islive_taskmanager?}, status: #{inspect(tm_status)}",
+      "producer" => "live: #{islive_producer?}, status: #{inspect(producer_status)}",
+      "microservice" => "live: #{islive_microservice?}, status: #{inspect(microservice_status)}",
+      "supervisors" => "live: ok",
+    }
+  end
+
+  defp get_process_state(pid) do
+    islive_process? = Process.alive?(pid)
+    {_, process_status} = Process.info(pid) |> Enum.at(3)
+    {islive_process? , process_status}
+  end
+
   get "/" do
     conn
     |> put_resp_content_type("application/json")
-    |> send_resp(200, Jason.encode!(%{test: :ok}))
+    |> send_resp(200, Jason.encode!(%{status: :ok}))
   end
 
-  get("/ping", do: send_resp(conn, 200, Jason.encode!("pong")))
+  get "/health" do
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(200, Jason.encode!(get_sys_state()))
+  end
+
+  #get("/health", do: send_resp(conn, 200, Jason.encode!(get_sys_state())))
 
   use Plug.ErrorHandler
 
@@ -42,7 +74,6 @@ defmodule Cermicros.Microservice do
   def start_link do
     Plug.Cowboy.http(Cermicros.Microservice, [plug: Cermicros.Microservice, scheme: :http, options: [port: 4000]], [])
     #webserver = {Plug.Cowboy, plug: CryptExchangeDataProviderMicroservice, scheme: :http, options: [port: 4000]}
-    #{:ok, _} = Supervisor.start_link([webserver], strategy: :one_for_one)
     Logger.info("Plug now running on localhost:4000")
     Process.sleep(:infinity)
   end
