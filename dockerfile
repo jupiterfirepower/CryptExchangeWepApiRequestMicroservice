@@ -14,16 +14,7 @@ RUN export MIX_ENV=prod && \
     rm -Rf _build && \
     rm -Rf .elixir-tools && \
     rm -Rf deps && \
-    #mix deps.clean --all && \
-    #mix local.hex --force && \
-    #mix local.rebar && \
     mix deps.get && \
-    #mix local.rebar && \
-    #mix deps.compile snappyer --force && \
-    #mix deps.compile && \
-    #mix deps.clean snappyer && \
-    #mix deps.compile snappyer --force && \ 
-    #mix deps.update snappyer && \
     mix release
 
 ENV APP_NAME cermicros
