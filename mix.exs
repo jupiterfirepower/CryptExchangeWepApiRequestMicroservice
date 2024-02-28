@@ -7,7 +7,13 @@ defmodule Cermicros.MixProject do
       version: "0.1.0",
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      releases: [ # add releases configuration
+       cermicros: [ # we can name releases anything, this will be prod's config
+           include_executables_for: [:unix], # we'll be deploying to Linux only
+           steps: [:assemble, :tar] # have Mix automatically create a tarball after assembly
+         ]
+      ]
     ]
   end
 
@@ -15,7 +21,7 @@ defmodule Cermicros.MixProject do
   def application do
     [
       extra_applications: [:logger, :cowboy, :plug],
-      mod: {Cermicros.Application, []}
+      mod: {Cermicros.Application, []},
     ]
   end
 
@@ -33,7 +39,9 @@ defmodule Cermicros.MixProject do
       {:nebulex_redis_adapter , "~> 2.3.1"},
       {:kaffe, "~> 1.18.0"},
       {:plug, "~> 1.14"},
-      {:plug_cowboy, "~> 2.6.1"}
+      {:plug_cowboy, "~> 2.6.1"},
+      #{:snappyer, "~> 1.2.9"},
+      {:distillery, "~> 2.1"},
     ]
   end
 end

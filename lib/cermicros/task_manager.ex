@@ -30,8 +30,13 @@ defmodule Cermicros.TaskManager do
   end
 
   defp do_work() do
-    urls = Jason.decode!(HttpHelper.gunzip_data((Cache.get "uri")))
-    Cermicros.Producer.do_work(urls)
+    try do
+      urls = Jason.decode!(HttpHelper.gunzip_data((Cache.get "uri")))
+      Cermicros.Producer.do_work(urls)
+    rescue
+      e in ArgumentError -> Logger.info("TaskManager do_work() ArgumentError key not found in redis (Cache.get \"uri\") #{inspect(e)}.")
+      e in Redix.ConnectionError -> Logger.info("TaskManager do_work() Redix.ConnectionError (Cache.get \"uri\") #{inspect(e)}.")
+    end
   end
 
   defp schedule_work do
