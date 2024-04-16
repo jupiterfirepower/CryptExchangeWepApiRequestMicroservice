@@ -13,7 +13,8 @@ defmodule Cermicros.MixProject do
            include_executables_for: [:unix], # we'll be deploying to Linux only
            steps: [:assemble, :tar] # have Mix automatically create a tarball after assembly
          ]
-      ]
+      ],
+      aliases: [test: "test --no-start"],
     ]
   end
 

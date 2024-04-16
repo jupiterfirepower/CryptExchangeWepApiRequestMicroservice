@@ -48,10 +48,37 @@ spec:
     - name: source
   steps:
   - name: ls
-    image: ubuntu
+    image: registry.access.redhat.com/ubi9/ubi-micro
     workingDir: $(workspaces.source.path)/src
     script: >
       ls
+---  
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: run-elixir-unit-tests
+spec:
+  workspaces:
+    - name: source
+  steps:
+  - name: ls
+    image: elixir:alpine
+    workingDir: $(workspaces.source.path)/src
+    script: |
+      #!/bin/sh
+
+      apk update 
+      apk upgrade
+      apk --update add g++ make cmake libc-dev libgcc musl
+
+      export MIX_ENV=prod
+      rm -Rf _build
+      rm -Rf .elixir-tools
+      rm -Rf deps
+      mix deps.get
+      mix release
+
+      mix test
 ---
 apiVersion: tekton.dev/v1beta1
 kind: Task
@@ -109,7 +136,9 @@ spec:
           value:
              url: $(params.gitrepo.url)
     - name: list-source-dir
-      runAfter: ["fetch-source"]
+      #runAfter: ["fetch-source"]
+      runAfter:
+        - fetch-source
       taskRef:
         name: list-source
       workspaces:
