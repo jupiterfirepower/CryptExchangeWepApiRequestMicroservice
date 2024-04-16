@@ -1,0 +1,142 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: git-clone-task
+spec:
+  params:
+    - name: gitrepo
+      type: object
+      properties:
+        url:
+          type: string
+  workspaces:
+    - name: source
+  steps:
+    - name: git-clone
+      image: alpine/git
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/bin/sh
+        mkdir -p src
+        cd src
+        git clone $(params.gitrepo.url) .
+        ls -la
+        cat dockerfile
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: show-readme
+spec:
+  description: Read and display README file.
+  workspaces:
+    - name: source
+  steps:
+    - name: read
+      image: alpine:latest
+      workingDir: $(workspaces.source.path)/src
+      script: |
+        #!/usr/bin/env sh
+        cat README.md
+---  
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: list-source
+spec:
+  workspaces:
+    - name: source
+  steps:
+  - name: ls
+    image: ubuntu
+    workingDir: $(workspaces.source.path)/src
+    script: >
+      ls
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: kaniko
+spec:
+  workspaces:
+    - name: source
+  steps:
+  - name: kaniko-image
+    workingDir: $(workspaces.source.path)/src
+    image: gcr.io/kaniko-project/executor:latest
+    command:
+        - /kaniko/executor
+    args: ["--dockerfile=dockerfile", "--context=.", "--destination=cryptazuredevregistry.azurecr.io/cermicros-image:latest"]
+---
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: git-clone-read
+spec:
+  description: |
+    This pipeline clones a git repo, then echoes the README file to the stdout.
+  params:
+    - name: gitrepo
+      type: object
+      properties:
+        url:
+          type: string
+  workspaces:
+    - name: shared-data
+      description: |
+        This workspace contains the cloned repo files, so they can be read by the
+        next task.
+  tasks:
+    - name: fetch-source      
+      taskRef:
+        name: git-clone-task
+      workspaces:
+        - name: source
+          workspace: shared-data
+      params:
+        - name: gitrepo
+          value:
+             url: $(params.gitrepo.url)
+    - name: list-source-dir
+      runAfter: ["fetch-source"]
+      taskRef:
+        name: list-source
+      workspaces:
+        - name: source
+          workspace: shared-data
+    - name: show-readme
+      runAfter: ["fetch-source"]
+      taskRef:
+        name: show-readme
+      workspaces:
+        - name: source
+          workspace: shared-data
+    - name: image-kaniko
+      runAfter: ["fetch-source"]
+      taskRef:
+        name: kaniko
+      workspaces:
+        - name: source
+          workspace: shared-data
+---
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: git-clone-read-run-
+  #name: git-clone-read-run-2qwer
+spec:
+  pipelineRef:
+    name: git-clone-read
+  workspaces:
+    - name: shared-data
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi
+  params:
+    - name: gitrepo
+      value:
+        url: "https://github.com/jupiterfirepower/CryptExchangeWepApiRequestMicroservice"
