@@ -61,7 +61,7 @@ spec:
   workspaces:
     - name: source
   steps:
-  - name: ls
+  - name: compile-and-run-elixir-tests
     image: elixir:alpine
     workingDir: $(workspaces.source.path)/src
     script: |
@@ -80,6 +80,90 @@ spec:
 
       mix test
 ---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: compile-and-run-on-redhat
+spec:
+  workspaces:
+    - name: source
+  steps:
+  - name: compile-and-run-elixir-tests-on-redhat-micro
+    image: registry.access.redhat.com/ubi9/ubi-minimal
+    workingDir: $(workspaces.source.path)/src
+    env:
+        - name: "LANG"
+          value: "en_US.UTF-8"
+        - name: "LANGUAGE"
+          value: "en_US:en"
+    script: |
+      #!/bin/bash
+
+      microdnf install -y glibc-langpack-en; sed -i 's/^LANG=.*/LANG="en_US.utf8"/' /etc/locale.conf
+      set ENV LANG=en_US.utf8
+      cat /etc/locale.conf
+
+      microdnf --enablerepo="ubi-9-codeready-builder"
+      
+      rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+      rpm -ql epel-release
+      microdnf repolist
+    
+      mkdir erliex && cd erliex
+
+      microdnf install -y openssl openssl-devel
+
+      curl -LO https://binaries2.erlang-solutions.com/centos/8/esl-erlang_26.2.1_1~centos~8_x86_64.rpm
+      ls -la
+      mv esl-erlang_26.2.1_1~centos~8_x86_64.rpm esl-erlang_26.2.1_1centos8_x86_64.rpm
+      ls -la
+      rpm -i esl-erlang_26.2.1_1centos8_x86_64.rpm
+
+      curl -LO https://fedora.pkgs.org/39/fedora-updates-testing-x86_64/erlang-crypto-26.2.4-1.fc39.x86_64.rpm.html
+
+      microdnf install -y esl-erlang
+      microdnf install -y unzip
+      microdnf install -y gcc binutils elfutils make perl
+
+      microdnf install -y tar
+
+      curl -LO https://www.openssl.org/source/openssl-1.1.1w.tar.gz
+      tar xvf openssl-1.1.1w.tar.gz
+      cd openssl-1.1*/
+      ./config --prefix=/usr/local/openssl --openssldir=/usr/local/openssl
+      make -j $(nproc)
+      make install
+      ldconfig
+
+      tee /etc/profile.d/openssl.sh<<EOF
+      export PATH=/usr/local/openssl/bin:\$PATH
+      export LD_LIBRARY_PATH=/usr/local/openssl/lib:\$LD_LIBRARY_PATH
+      EOF
+      source /etc/profile.d/openssl.sh
+      
+      cd ..
+
+      curl -LO https://github.com/elixir-lang/elixir/releases/download/v1.16.2/elixir-otp-26.zip
+
+      unzip elixir-otp-26.zip
+      cp -rf bin/* /usr/bin/
+      cp -rf lib/* /lib/
+      cp -rf man/* /usr/share/man/
+
+      cd .. && rm -rf erliex/
+
+      mix archive.install github hexpm/hex branch latest
+      microdnf install -y erlang-crypto
+
+      export MIX_ENV=prod
+      rm -Rf _build
+      rm -Rf .elixir-tools
+      rm -Rf deps
+      mix deps.get
+      mix release
+
+      mix test
+---      
 apiVersion: tekton.dev/v1beta1
 kind: Task
 metadata:
@@ -151,8 +235,22 @@ spec:
       workspaces:
         - name: source
           workspace: shared-data
-    - name: image-kaniko
+    - name: compile-and-run-tests
       runAfter: ["fetch-source"]
+      taskRef:
+        name: run-elixir-unit-tests
+      workspaces:
+        - name: source
+          workspace: shared-data
+    - name: compile-on-redhat
+      runAfter: ["fetch-source"]
+      taskRef:
+        name: compile-and-run-on-redhat
+      workspaces:
+        - name: source
+          workspace: shared-data
+    - name: image-kaniko
+      runAfter: ["compile-and-run-tests"]
       taskRef:
         name: kaniko
       params:
