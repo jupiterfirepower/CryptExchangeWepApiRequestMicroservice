@@ -163,7 +163,40 @@ spec:
       mix release
 
       mix test
----      
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: compile-and-run-on-fedora
+spec:
+  workspaces:
+    - name: source
+  steps:
+  - name: compile-and-run-elixir-tests-on-fedora
+    image: fedora:latest
+    workingDir: $(workspaces.source.path)/src
+    script: |
+      #!/bin/bash
+
+      dnf install -y glibc-langpack-en; sed -i 's/^LANG=.*/LANG="en_US.utf8"/' /etc/locale.conf
+      set ENV LANG=en_US.utf8
+      cat /etc/locale.conf
+
+      dnf install -y erlang elixir erlang-syntax_tools
+      dnf -y groupinstall c-development
+      dnf install -y gcc gcc-c++ make cmake libc-dev libgcc 
+
+      mix archive.install github hexpm/hex branch latest
+
+      export MIX_ENV=prod
+      rm -Rf _build
+      rm -Rf .elixir-tools
+      rm -Rf deps
+      mix deps.get
+      mix release
+
+      mix test
+---
 apiVersion: tekton.dev/v1beta1
 kind: Task
 metadata:
@@ -187,6 +220,29 @@ spec:
         - --context=.
         - --destination=$(params.azure-container-registry-name).azurecr.io/cermicros-image:latest
 ---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: cleanup
+spec:
+  workspaces:
+    - name: source
+  steps:
+    - name: remove-source
+      image: registry.access.redhat.com/ubi8/ubi
+      command:
+        - /bin/bash
+      args: 
+        - "-c"
+        - "rm -rf $(workspaces.source.path)/source"
+    - name: message
+      image: registry.access.redhat.com/ubi8/ubi
+      command:
+        - /bin/bash
+      args:
+        - "-c"
+        - echo All files were deleted
+---        
 apiVersion: tekton.dev/v1beta1
 kind: Pipeline
 metadata:
@@ -249,6 +305,13 @@ spec:
       workspaces:
         - name: source
           workspace: shared-data
+    - name: compile-on-fedora
+      runAfter: ["fetch-source"]
+      taskRef:
+        name: compile-and-run-on-fedora
+      workspaces:
+        - name: source
+          workspace: shared-data
     - name: image-kaniko
       runAfter: ["compile-and-run-tests"]
       taskRef:
@@ -259,12 +322,19 @@ spec:
       workspaces:
         - name: source
           workspace: shared-data
+  finally:  
+    - name: cleanup-resources
+      taskRef:
+        name: cleanup
+      workspaces:
+        - name: source
+          workspace: shared-data
 ---
 apiVersion: tekton.dev/v1beta1
 kind: PipelineRun
 metadata:
   #generateName: git-clone-read-run-
-  name: git-clone-read-run-1qwer
+  name: git-clone-read-run-3qwer
 spec:
   pipelineRef:
     name: git-clone-read
